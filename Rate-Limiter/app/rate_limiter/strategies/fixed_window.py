@@ -15,9 +15,8 @@ class FixedWindowRateLimiter(BaseRateLimiter):
     - Suitable for basic rate limiting needs where strict accuracy is not critical.
     """
 
-    def __init__(
-        self, config: FixedWindowRateLimitConfig = FixedWindowRateLimitConfig()
-    ):
+    def __init__(self, config: FixedWindowRateLimitConfig | None = None):
+        config = config or FixedWindowRateLimitConfig()
         self.limit = config.limit
         self.window = config.window
 
