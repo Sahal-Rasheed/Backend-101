@@ -58,4 +58,4 @@ class FixedWindowRateLimiter(BaseRateLimiter):
 # - However, it is not atomic. Atomic in db terms means all operations succeed or fail together.
 # - Here INCR and EXPIRE are two separate o/p calls. We need to execute them together atomically to ensure that if one succeeds, the other does too.
 # - If the process crashes after INCR but before EXPIRE, the key will leak (stay in Redis forever).
-# - Use Lua to wrap these into a single, indivisible operation to ensure atomicity.
+# - Use Lua to wrap these into a single, indivisible operation to execute them together atomically. This way, if the process crashes during execution, either both operations succeed or neither does, preventing leaks and ensuring consistent state.
