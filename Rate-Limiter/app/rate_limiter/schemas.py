@@ -15,18 +15,18 @@ class RateLimitBaseConfig(BaseModel):
 
 
 class FixedWindowRateLimitConfig(RateLimitBaseConfig):
-    limit: int = 100
-    window: int = 60
+    limit: int = Field(default=100, gt=0, description="Max requests per window")
+    window: int = Field(default=60, gt=0, description="Window (time) size in seconds")
 
 
 class SlidingWindowRateLimitConfig(RateLimitBaseConfig):
-    limit: int = 100
-    window: int = 60
+    limit: int = Field(default=100, gt=0, description="Max requests per window")
+    window: int = Field(default=60, gt=0, description="Window (time) size in seconds")
 
 
 class TokenBucketRateLimitConfig(BaseModel):
-    capacity: int = Field(default=100, gt=0)
-    refill_rate: float = Field(default=100.0, gt=0)
+    capacity: int = Field(default=100, gt=0, description="Maximum number of tokens")
+    refill_rate: float = Field(default=100.0, gt=0, description="Tokens added per second")
 
 
 class RateLimitResult(BaseModel):
