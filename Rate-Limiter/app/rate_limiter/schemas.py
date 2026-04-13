@@ -32,4 +32,4 @@ class TokenBucketRateLimitConfig(BaseModel):
 class RateLimitResult(BaseModel):
     allowed: bool
     remaining: int
-    reset_at: int
+    reset_at: int | None
