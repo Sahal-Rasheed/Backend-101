@@ -84,7 +84,8 @@ Request B → ZADD → 6 ❌ (limit exceeded)
 
 ### What it does:
 
-* Provides **mutual exclusion** across distributed systems
+* Provides **mutual exclusion** across distributed systems. 
+* A client can acquire a lock before executing critical section and release it afterward. Same like `locks` in traditional programming we do to prevent race conditions in concurrency scenarios (there lock is exclusive to a single process). But in distributed systems, we need `distributed locks` to coordinate access across multiple services/processes than a lock that is exclusive to a single process. For this we use Redis to implement distributed locks.
 
 ```bash
 SET lock_key value NX EX 10
