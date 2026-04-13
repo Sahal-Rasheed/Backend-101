@@ -26,7 +26,7 @@ class SlidingWindowRateLimitConfig(RateLimitBaseConfig):
 
 class TokenBucketRateLimitConfig(BaseModel):
     capacity: int = Field(default=100, gt=0, description="Maximum number of tokens")
-    refill_rate: float = Field(default=100.0, gt=0, description="Tokens added per second")
+    refill_rate: int = Field(default=10, gt=0, description="Tokens added per second")
 
 
 class RateLimitResult(BaseModel):
