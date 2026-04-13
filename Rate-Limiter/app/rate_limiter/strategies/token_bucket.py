@@ -7,9 +7,8 @@ from app.rate_limiter.schemas import TokenBucketRateLimitConfig, RateLimitResult
 
 
 class TokenBucketRateLimiter(BaseRateLimiter):
-    def __init__(
-        self, config: TokenBucketRateLimitConfig = TokenBucketRateLimitConfig()
-    ):
+    def __init__(self, config: TokenBucketRateLimitConfig | None = None):
+        config = config or TokenBucketRateLimitConfig()
         self.capacity = config.capacity
         self.refill_rate = config.refill_rate
 
