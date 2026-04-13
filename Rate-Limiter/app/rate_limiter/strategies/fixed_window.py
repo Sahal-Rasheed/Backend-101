@@ -22,13 +22,12 @@ class FixedWindowRateLimiter(BaseRateLimiter):
         self.window = config.window
 
     async def allow_request(self, key: str) -> RateLimitResult:
-        # INCR + EXPIRE approach for fixed window counting (not atomic)
-        # INCR and EXPIRE are atomic individually but not atomic together
+        # INCR + EXPIRE approach for fixed window counting (not atomic altogether)
         current = await redis.client.incr(key)
         if current == 1:
             await redis.client.expire(key, self.window)
 
-        # LUA script approach for atomic INCR + EXPIRE for fixed window counting
+        # LUA script based INCR + EXPIRE approach for fixed window counting (atomic altogether)
         # incr_expire_script = redis.client.register_script(
         #     """
         #     local current = redis.call("INCR", KEYS[1])
@@ -50,3 +49,13 @@ class FixedWindowRateLimiter(BaseRateLimiter):
             remaining=remaining,
             reset_at=int(time.time()) + ttl,
         )
+
+
+## Note on thread-safety and atomicity:
+# - The `INCR + EXPIRE` approach is simple and works well for many use cases, but it has a potential issue:
+# - if the process crashes after INCR but before EXPIRE, the key will never expire, leading to a "leaked" key that stays in Redis indefinitely. This can cause memory issues over time if many keys are leaked.
+# - Even though logic is thread-safe because Redis is single-threaded (only one request gets current == 1).
+# - However, it is not atomic. Atomic in db terms means all operations succeed or fail together.
+# - Here INCR and EXPIRE are two separate o/p calls. We need to execute them together atomically to ensure that if one succeeds, the other does too.
+# - If the process crashes after INCR but before EXPIRE, the key will leak (stay in Redis forever).
+# - Use Lua to wrap these into a single, indivisible operation to ensure atomicity.
