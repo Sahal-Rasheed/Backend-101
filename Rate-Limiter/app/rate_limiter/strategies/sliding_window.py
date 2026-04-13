@@ -159,5 +159,5 @@ class SlidingWindowRateLimiter(BaseRateLimiter):
 
 # - Summary:
 #   - Non-atomic multi-command logic → prone to race conditions
-#   - Locks → correct but heavy and reduces concurrency
-#   - Lua script → atomic, efficient, and preferred solution
+#   - Locks → correct but heavy and reduces concurrency, since no external resource is being modified, we can avoid locks
+#   - Lua script → atomic, efficient, and preferred solution since logic is inside redis
