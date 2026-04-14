@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import router as api_router
 from app.core.config import settings
 from app.core.redis import redis_client
+from app.api.routes import router as api_router
 
 
 logger = logging.getLogger(__name__)
@@ -33,8 +33,8 @@ app = FastAPI(
 
 @app.get("/")
 async def root():
-    logger.info("Hello World")
-    return {"message": "Hello World"}
+    logger.info("Root endpoint accessed")
+    return {"message": "Welcome to the Rate Limiter API!"}
 
 
 app.include_router(api_router, prefix=settings.API_V1_STR)

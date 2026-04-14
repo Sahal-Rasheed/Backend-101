@@ -45,3 +45,24 @@ async def token_bucket_probe(
     ),
 ):
     return {"strategy": RateLimitStrategy.TOKEN_BUCKET, "status": "allowed"}
+
+
+# NOTE:
+
+# We use `functools.partial` with FastAPI dependencies to pre-bind
+# configuration arguments (e.g., rate limit strategy, prefix) while
+# still allowing FastAPI to inject request-scoped parameters like `Request` and `Response`.
+
+# Why not call the dependency function directly with args inside Depends ?
+# Calling the dependency (e.g., rate_limiter_dependency(...)) would
+# execute it at import time and pass its result to Depends, which is incorrect.
+# FastAPI expects a `callable`, not the result of a function call as a dependency as FastAPI will automatically call the dependency function.
+
+# Why `partial`?
+# `partial` returns a new `callable` with some arguments pre-filled,
+# making it a concise and readable way to pass parameterized dependencies
+# This makes it easy to use parameterized dependencies in FastAPI.
+
+# When to refactor?
+# If the dependency requires additional logic (logging, branching, complex configuration)
+# prefer a dependency factory (wrapper function) instead of `partial` for better readability and maintainability.
