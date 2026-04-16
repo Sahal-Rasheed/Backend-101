@@ -15,12 +15,6 @@ from app.rate_limiter.strategies.token_bucket import TokenBucketRateLimiter
 pytestmark = pytest.mark.integration
 
 
-async def _flush_redis() -> None:
-    from app.core.redis import redis_client
-
-    await redis_client.client.flushdb()
-
-
 def _assert_common_headers(resp, strategy: str) -> None:
     headers = resp.headers
 
@@ -51,8 +45,6 @@ async def test_rate_limiter_allows_first_request(
     """
     First request should be allowed and include rate limit metadata.
     """
-    await _flush_redis()
-
     resp = await client.get(endpoint)
 
     assert resp.status_code == 200
@@ -78,8 +70,6 @@ async def test_rate_limit_remaining_decreases_on_consecutive_requests(
     """
     Consecutive requests from the same client should consume quota.
     """
-    await _flush_redis()
-
     first = await client.get(endpoint)
     second = await client.get(endpoint)
 
@@ -110,7 +100,6 @@ async def test_rate_limit_blocks_after_small_quota(
     """
     With tiny limits, the third immediate request should be rejected.
     """
-    await _flush_redis()
 
     def rate_limit_factory_patch(selected: RateLimitStrategy):
         if selected == RateLimitStrategy.FIXED_WINDOW:
@@ -151,7 +140,6 @@ async def test_token_bucket_low_capacity_exposes_configured_limit(
     """
     Token bucket endpoint should expose patched capacity in rate limit headers.
     """
-    await _flush_redis()
 
     def rate_limit_factory_patch(selected: RateLimitStrategy):
         if selected == RateLimitStrategy.TOKEN_BUCKET:

@@ -18,4 +18,6 @@ async def client():
     ) as client:
         yield client
 
+    # cleanup redis after each test
+    await redis_client.client.flushdb()
     await redis_client.close()
