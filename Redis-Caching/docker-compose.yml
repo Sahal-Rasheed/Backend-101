@@ -1,0 +1,17 @@
+services:
+  redis:
+    container_name: be-101-redis-caching-redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  redis-commander:
+    container_name: be-101-redis-caching-redis-commander
+    image: ghcr.io/joeferner/redis-commander:latest
+    restart: always
+    environment:
+      - REDIS_HOSTS=local:be-101-redis-caching-redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
