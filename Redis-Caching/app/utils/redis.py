@@ -21,5 +21,8 @@ class CacheService:
         async for key in redis.client.scan_iter(pattern):
             await redis.client.delete(key)
 
+    async def acquire_lock(self, lock_key: str, timeout: int = 10) -> bool:
+        return await redis.client.set(lock_key, "1", ex=timeout, nx=True)
+
 
 cache = CacheService()

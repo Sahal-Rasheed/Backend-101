@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Query, status
 from fastapi.exceptions import HTTPException
 
@@ -58,17 +60,36 @@ async def get_product(db: AsyncSessionDep, product_id: int) -> ProductResponse:
 
     # miss
     print(f"Cache miss for product_id={product_id}")
-    product = await product_repository.get_product(db, product_id)
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
-        )
 
-    await cache.set(
-        f"product:{product.id}",
-        ProductResponse.model_validate(product).model_dump(),
-    )
-    return product
+    # acquire lock to prevent cache stampede
+    # on a cache miss, multiple requests for the same product_id can hit the database simultaneously, causing high load.
+    # by acquiring a lock, we ensure that only one request fetches the data from the database and populates the cache, while others wait and retry after a short delay.
+    lock_key = f"lock:product:{product_id}"
+    lock_acquired = await cache.acquire_lock(lock_key, timeout=10)
+    if lock_acquired:
+        product = await product_repository.get_product(db, product_id)
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+            )
+        await cache.set(
+            f"product:{product.id}",
+            ProductResponse.model_validate(product).model_dump(),
+        )
+        return product
+    else:
+        # wait before retrying,
+        # giving the lock holder time to fetch data and populate cache
+        await asyncio.sleep(0.5)
+        cached_product = await cache.get(f"product:{product_id}")
+        if cached_product:
+            print(f"Cache hit after waiting for product_id={product_id}")
+            return cached_product
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please retry after a moment",
+            )
 
 
 @router.put(
