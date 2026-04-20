@@ -1,0 +1,52 @@
+services:
+  redis:
+    container_name: be-101-email-service-redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - email_service_redis_data:/data
+
+  redis-commander:
+    container_name: be-101-email-service-redis-commander
+    image: ghcr.io/joeferner/redis-commander:latest
+    restart: always
+    environment:
+      - REDIS_HOSTS=local:be-101-email-service-redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+
+  celery-worker-default:
+    build: .
+    command: celery -A app.core.celery.celery_app worker --pool=threads --concurrency=10 -Q default -n worker-default --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  celery-worker-high:
+    build: .
+    command: celery -A app.core.celery.celery_app worker --pool=threads --concurrency=4 -Q high -n worker-high --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  celery-worker-low:
+    build: .
+    command: celery -A app.core.celery.celery_app worker --pool=threads --concurrency=2 -Q low -n worker-low --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  email_service_redis_data:
