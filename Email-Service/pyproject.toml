@@ -5,9 +5,12 @@ description = "FastAPI-based email sending service using Celery and Redis."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "asyncpg>=0.31.0", # for async postgres connection outside celery tasks
     "celery[redis]>=5.6.3",
     "fastapi[standard]>=0.136.0",
+    "flower>=2.0.1",
     "orjson>=3.11.8",
+    "psycopg[binary]>=3.3.3", # for sync postgres connection inside celery tasks
     "redis[hiredis]>=6.4.0",
     "resend>=2.29.0",
     "sqlalchemy[asyncio]>=2.0.49",
