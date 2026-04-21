@@ -10,7 +10,12 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
     REDIS_URL: str = "redis://localhost:6379/1"
-    SQLITE_DATABASE_URL: str = "sqlite+aiosqlite:///./database.db"
+    POSTGRES_DB: str = ""
+    POSTGRES_USER: str
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int = 5432
+    POSTGRES_PASSWORD: str = ""
+    POSTGRES_DATABASE_URL: str
 
     RESEND_API_KEY: str
     RESEND_SENDER_EMAIL: str = "onboarding@resend.dev"

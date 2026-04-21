@@ -13,7 +13,7 @@ def send_email_via_smtp(to_email: str, subject: str, html_content: str) -> dict:
     Fallback email sending via SMTP if Resend API fails.
     """
     msg = MIMEMultipart()
-    msg["From"] = settings.SMTP_USER
+    msg["From"] = settings.RESEND_SENDER_EMAIL
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.attach(MIMEText(html_content, "html"))

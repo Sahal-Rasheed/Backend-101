@@ -7,9 +7,8 @@ from sqlalchemy.orm import sessionmaker, Session
 from app.core.config import settings
 
 sync_engine = create_engine(
-    settings.SQLITE_DATABASE_URL.replace("sqlite+aiosqlite", "sqlite"),
+    settings.POSTGRES_DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psycopg"),
     echo=False,
-    connect_args={"check_same_thread": False},
 )
 
 sync_session_maker = sessionmaker(bind=sync_engine, expire_on_commit=False)

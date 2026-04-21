@@ -1,5 +1,6 @@
-from uuid import uuid4, UUID
+from uuid import uuid4
 
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -11,7 +12,7 @@ class EmailLog(Base, TimeStampMixin):
     __tablename__ = "email_logs"
 
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, index=True, default_factory=uuid4
+        UUID(as_uuid=True), primary_key=True, index=True, default=uuid4
     )
     to_email: Mapped[str] = mapped_column(index=True)
     subject: Mapped[str]
@@ -28,7 +29,7 @@ class EmailBlacklist(Base):
     __tablename__ = "email_blacklist"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    email: Mapped[str]
+    email: Mapped[str] = mapped_column(index=True)
     reason: Mapped[str | None] = mapped_column(nullable=True)
 
     def __repr__(self) -> str:

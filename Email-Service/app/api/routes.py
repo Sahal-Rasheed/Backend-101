@@ -42,7 +42,8 @@ async def send_email(
                 "id": str(email_log.id),
                 "to_email": email_log.to_email,
                 "subject": email_log.subject,
-                "html_content": email_log.html_content,
+                # "html_content": email_log.html_content,
+                "html_content": f"<h1>Welcome, {email_log.to_email}!</h1><p>Thank you for joining our platform.</p>",
             }
         )
 
