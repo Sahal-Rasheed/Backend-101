@@ -1,52 +1,193 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: be-101-email-service-db
+    restart: always
+    env_file: ./.env
+    ports:
+      - "5432:5432"
+    volumes:
+      - email_service_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - be-101-email-service-network
+
   redis:
     container_name: be-101-email-service-redis
     image: redis:7-alpine
+    restart: always
     ports:
       - "6379:6379"
     volumes:
       - email_service_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - be-101-email-service-network
+
+  app:
+    build: .
+    image: be-101-email-service-app:dev
+    container_name: be-101-email-service-app
+    volumes:
+      - .:/app
+      - /app/.venv # don't override .venv since using uv
+      # - ./app:/app/app
+      # - ./pyproject.toml:/app/pyproject.toml
+      # - ./uv.lock:/app/uv.lock
+      # - ./requirements.txt:/app/requirements.txt
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - be-101-email-service-network
+
+  celery-worker-default:
+    # build: . # don't need to build again since we are using the same image as app, this will save time and resources.
+    image: be-101-email-service-app:dev # use the same image as app without needing to rebuild, since celery worker use same codebase as app and since we already built the image for app and its already available locally, we can use it for celery worker without needing to build it again.
+    container_name: be-101-email-service-celery-worker-default
+    command: [
+        "celery",
+        "-A",
+        "app.core.celery.celery_app",
+        "worker",
+        "--pool=threads",
+        "--concurrency=10",
+        "-Q",
+        "default",
+        "-n", # use to set unique worker name
+        "worker-default@%h", # use %h to suffix the worker name with the hostname
+        "--loglevel=info",
+      ]
+    env_file:
+      - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - be-101-email-service-network
+
+  celery-worker-high:
+    image: be-101-email-service-app:dev
+    container_name: be-101-email-service-celery-worker-high
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery.celery_app",
+        "worker",
+        "--pool=threads",
+        "--concurrency=4",
+        "-Q",
+        "high",
+        "-n",
+        "worker-high@%h",
+        "--loglevel=info",
+      ]
+    env_file:
+      - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - be-101-email-service-network
+
+  celery-worker-low:
+    image: be-101-email-service-app:dev
+    container_name: be-101-email-service-celery-worker-low
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery.celery_app",
+        "worker",
+        "--pool=threads",
+        "--concurrency=2",
+        "-Q",
+        "low",
+        "-n",
+        "worker-low@%h",
+        "--loglevel=info",
+      ]
+    env_file:
+      - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - be-101-email-service-network
+
+  flower:
+    image: be-101-email-service-app:dev
+    container_name: be-101-email-service-flower-ui
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery.celery_app",
+        "flower",
+        "--port=5555",
+        "--loglevel=info",
+      ]
+      # add following flags to enable persistence for flower
+      # "--persistence=True",
+      # "--state_save_interval=5000"
+    ports:
+      - "5555:5555"
+    # volumes:
+    #   - flower_data:/data
+    env_file:
+      - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - be-101-email-service-network
 
   redis-commander:
-    container_name: be-101-email-service-redis-commander
     image: ghcr.io/joeferner/redis-commander:latest
+    container_name: be-101-email-service-redis-commander
     restart: always
     environment:
       - REDIS_HOSTS=local:be-101-email-service-redis:6379
     ports:
       - "8081:8081"
     depends_on:
-      - redis
-
-  celery-worker-default:
-    build: .
-    command: celery -A app.core.celery.celery_app worker --pool=threads --concurrency=10 -Q default -n worker-default --loglevel=info
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-    depends_on:
       redis:
         condition: service_healthy
-
-  celery-worker-high:
-    build: .
-    command: celery -A app.core.celery.celery_app worker --pool=threads --concurrency=4 -Q high -n worker-high --loglevel=info
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-    depends_on:
-      redis:
-        condition: service_healthy
-
-  celery-worker-low:
-    build: .
-    command: celery -A app.core.celery.celery_app worker --pool=threads --concurrency=2 -Q low -n worker-low --loglevel=info
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-    depends_on:
-      redis:
-        condition: service_healthy
+    networks:
+      - be-101-email-service-network
 
 volumes:
   email_service_redis_data:
+  email_service_db_data:
+  # flower_data:
+
+networks:
+  be-101-email-service-network:
+    driver: bridge
