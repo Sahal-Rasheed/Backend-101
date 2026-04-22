@@ -5,7 +5,7 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.core.redis import redis_client
-from app.api.routes import router as api_router
+from app.api import router as api_router
 from app.db.async_session import init_models, async_engine
 
 
