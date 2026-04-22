@@ -24,5 +24,12 @@ class RedisService:
     def acquire_lock(self, lock_key: str, timeout: int = 10) -> bool:
         return redis.client.set(lock_key, "1", ex=timeout, nx=True)
 
+    def get_ttl(self, key: str) -> int:
+        return redis.client.ttl(key)
+
+    def run_lua_script(self, script: str, keys: list[str], args: list[Any]) -> Any:
+        lua_script = redis.client.register_script(script)
+        return lua_script(keys=keys, args=args)
+
 
 redis_service = RedisService()

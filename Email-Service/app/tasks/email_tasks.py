@@ -73,6 +73,104 @@ def send_welcome_email(self, data: dict) -> dict:
         }
 
 
+@celery_app.task(
+    bind=True,
+    name="send_pwd_reset_email_task",
+    autoretry_for=(Exception, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=5,
+)
+def send_pwd_reset_email(self, data: dict) -> dict:
+    """
+    Celery task to send password reset email to users.
+    """
+    try:
+        # update email log status to processing before sending email
+        with get_sync_session() as db:
+            email_log = db.execute(
+                select(EmailLog).where(EmailLog.id == data["id"])
+            ).scalar_one_or_none()
+            email_log.status = EmailStatus.PROCESSING
+            db.commit()
+            db.refresh(email_log)
+
+        result = send_email(
+            to_email=data["to_email"],
+            subject=data["subject"],
+            html_content=data["html_content"],
+        )
+
+        # update email log with provider info and mark as sent
+        with get_sync_session() as db:
+            email_log = db.execute(
+                select(EmailLog).where(EmailLog.id == data["id"])
+            ).scalar_one_or_none()
+            email_log.provider = (
+                EmailProvider.RESEND
+                if result["provider"] == "resend"
+                else EmailProvider.SMTP
+            )
+            email_log.status = EmailStatus.SENT
+            db.commit()
+            db.refresh(email_log)
+
+        return {"success": True, "email_log_id": str(data["id"]), "error": None}
+    except Exception as ex:
+        print(f"Error in send_pwd_reset_email task: {ex}")
+        raise self.retry(exc=ex)
+
+
+@celery_app.task(
+    bind=True,
+    name="send_notification_email_task",
+    autoretry_for=(Exception, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=5,
+)
+def send_notification_email(self, data: dict) -> dict:
+    """
+    Celery task to send notification email to users.
+    """
+    try:
+        # update email log status to processing before sending email
+        with get_sync_session() as db:
+            email_log = db.execute(
+                select(EmailLog).where(EmailLog.id == data["id"])
+            ).scalar_one_or_none()
+            email_log.status = EmailStatus.PROCESSING
+            db.commit()
+            db.refresh(email_log)
+
+        result = send_email(
+            to_email=data["to_email"],
+            subject=data["subject"],
+            html_content=data["html_content"],
+        )
+
+        # update email log with provider info and mark as sent
+        with get_sync_session() as db:
+            email_log = db.execute(
+                select(EmailLog).where(EmailLog.id == data["id"])
+            ).scalar_one_or_none()
+            email_log.provider = (
+                EmailProvider.RESEND
+                if result["provider"] == "resend"
+                else EmailProvider.SMTP
+            )
+            email_log.status = EmailStatus.SENT
+            db.commit()
+            db.refresh(email_log)
+
+        return {"success": True, "email_log_id": str(data["id"]), "error": None}
+    except Exception as ex:
+        print(f"Error in send_notification_email task: {ex}")
+        raise self.retry(exc=ex)
+
+
 # references:
 # https://docs.celeryq.dev/en/main/_modules/celery/app/task.html#Task
 # https://docs.celeryq.dev/en/main/userguide/tasks.html

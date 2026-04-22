@@ -29,7 +29,9 @@ class EmailBlacklist(Base):
     __tablename__ = "email_blacklist"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    email: Mapped[str] = mapped_column(index=True)
+    email: Mapped[str] = mapped_column(
+        index=True, unique=True
+    )  # unique constraint needed for upsert operation
     reason: Mapped[str | None] = mapped_column(nullable=True)
 
     def __repr__(self) -> str:

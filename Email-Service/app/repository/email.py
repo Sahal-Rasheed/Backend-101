@@ -1,5 +1,8 @@
-from sqlalchemy import select, func
+from uuid import UUID
+
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert
 
 from app.models.email import EmailLog, EmailBlacklist
 from app.schemas.email import EmailSendPayload
@@ -19,9 +22,22 @@ class EmailRepository:
         await db.refresh(email)
         return email
 
-    async def get_email_log(self, db: AsyncSession, email_id: int) -> EmailLog | None:
+    async def update_email_log_status(
+        self, db: AsyncSession, email: str, status: str, error: str | None = None
+    ) -> EmailLog | None:
+        stmt = (
+            update(self.email_log_model)
+            .where(self.email_log_model.to_email == email)
+            .values(status=status, error=error)
+            .returning(self.email_log_model)
+        )
+        result = await db.execute(stmt)
+        await db.commit()
+        return result.scalar_one_or_none()
+
+    async def get_email_log(self, db: AsyncSession, id: UUID) -> EmailLog | None:
         result = await db.execute(
-            select(self.email_log_model).where(self.email_log_model.id == email_id)
+            select(self.email_log_model).where(self.email_log_model.id == id)
         )
         return result.scalar_one_or_none()
 
@@ -38,14 +54,23 @@ class EmailRepository:
         result = await db.execute(query)
         return list(result.scalars().all())
 
-    async def create_email_blacklist(
+    async def upsert_email_blacklist(
         self, db: AsyncSession, email: str, reason: str | None = None
     ) -> EmailBlacklist:
-        blacklist_entry = self.email_blacklist_model(email=email, reason=reason)
-        db.add(blacklist_entry)
+        stmt = (
+            insert(self.email_blacklist_model)
+            .values(email=email, reason=reason)
+            .on_conflict_do_update(
+                index_elements=[
+                    self.email_blacklist_model.email
+                ],  # target the unique email column for conflict detection for upsert
+                set_={"reason": reason},
+            )
+            .returning(self.email_blacklist_model)
+        )
+        result = await db.execute(stmt)
         await db.commit()
-        await db.refresh(blacklist_entry)
-        return blacklist_entry
+        return result.scalar_one()
 
     async def is_email_blacklisted(self, db: AsyncSession, email: str) -> bool:
         result = await db.execute(

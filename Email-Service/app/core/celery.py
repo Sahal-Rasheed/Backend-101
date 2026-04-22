@@ -40,9 +40,10 @@ celery_app.conf.update(
         Queue("low", routing_key="low"),
     ),
     task_routes={
-        "app.tasks.email_tasks.send_welcome_email": {"queue": "default"},
-        "app.tasks.email_tasks.send_urgent_notification": {"queue": "high"},
-        "app.tasks.email_tasks.generate_report": {"queue": "low"},
+        # if task has custom name use that name, otherwise use the path to the task fn
+        "send_welcome_email_task": {"queue": "default"},
+        "send_notification_email_task": {"queue": "high"},
+        "send_pwd_reset_email_task": {"queue": "low"},
     },
     # result backend retry settings
     # result_backend_always_retry=True, # retry transient result backend errors automatically

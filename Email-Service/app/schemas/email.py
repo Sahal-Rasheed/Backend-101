@@ -1,4 +1,6 @@
+from uuid import UUID
 from typing import Literal, Any
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, EmailStr
@@ -42,3 +44,27 @@ class EmailTaskStatusResponse(BaseModel):
     result: Any | None = None
     error: Any | None = None
     trace: Any | None = None
+
+
+class EmailLogResponse(BaseModel):
+    id: UUID
+    to_email: EmailStr
+    subject: str
+    email_type: EmailType
+    status: EmailStatus
+    provider: EmailProvider | None = None
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class EmailBlacklistResponse(BaseModel):
+    id: int
+    email: EmailStr
+    reason: str | None = None
+
+    class Config:
+        from_attributes = True

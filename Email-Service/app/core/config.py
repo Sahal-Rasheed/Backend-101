@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     POSTGRES_DATABASE_URL: str
 
     RESEND_API_KEY: str
-    RESEND_SENDER_EMAIL: str = "onboarding@resend.dev"
+    RESEND_SENDER_EMAIL: str
+    RESEND_WEBHOOK_SECRET: str
 
     SMTP_USER: str
     SMTP_PASS: str
