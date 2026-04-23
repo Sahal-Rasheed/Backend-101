@@ -4,9 +4,10 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, Header, Query, status
 from fastapi.exceptions import HTTPException
 
-from app.utils.redis import redis_service  # noqa
+from app.utils.redis import redis_service
 from app.db.async_session import AsyncSessionDep
 from app.repository.email import email_repository
+from app.middlewares.idempotency import IdempotencyDep
 from app.middlewares.rate_limiter import RateLimiterDep
 from app.tasks.email_tasks import (
     send_welcome_email,
@@ -30,10 +31,12 @@ email_router = APIRouter()
     "/send", status_code=status.HTTP_200_OK, response_model=EmailSendResponse
 )
 async def send_email(
-    _: RateLimiterDep,
+    rdep: RateLimiterDep,
+    idep: IdempotencyDep,
     db: AsyncSessionDep,
     email_data: EmailSendPayload,
     x_tenant_id: str = Header(..., alias="x-tenant-id"),
+    x_request_id: str = Header(..., alias="x-request-id"),
 ) -> EmailSendResponse:
     """Endpoint to dispatch email sending tasks."""
     is_blacklisted = await email_repository.is_email_blacklisted(
@@ -44,7 +47,7 @@ async def send_email(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Email address is blacklisted",
         )
-    
+
     # return EmailSendResponse(task_id="", email_log_id="", status=EmailStatus.QUEUED)
 
     # create initial email log entry in the database
@@ -80,6 +83,21 @@ async def send_email(
                 "html_content": "<h1>Notification</h1><p>This is a notification email.</p>",
             }
         )
+
+    # store task result in redis with idempotency key
+    # to prevent duplicate processing of same request
+    redis_service.set(
+        f"idempotency:{x_request_id}",
+        {
+            "status": "completed",
+            "body": {
+                "task_id": task.id,
+                "email_log_id": str(email_log.id),
+                "status": EmailStatus.QUEUED,
+            },
+        },
+        expire=24 * 3600,
+    )
 
     return EmailSendResponse(
         task_id=task.id, email_log_id=str(email_log.id), status=EmailStatus.QUEUED

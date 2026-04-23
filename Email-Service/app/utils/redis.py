@@ -9,6 +9,7 @@ class RedisService:
         data_json = redis.client.get(key)
         if data_json is None:
             return None
+        print(f"Redis GET: {key} -> {data_json}")
         return orjson.loads(data_json)
 
     def set(self, key: str, value: Any, expire: int = 60) -> None:
@@ -21,8 +22,8 @@ class RedisService:
         for key in redis.client.scan_iter(pattern):
             redis.client.delete(key)
 
-    def acquire_lock(self, lock_key: str, timeout: int = 10) -> bool:
-        return redis.client.set(lock_key, "1", ex=timeout, nx=True)
+    def acquire_lock(self, lock_key: str, value: Any) -> bool:
+        return redis.client.set(lock_key, orjson.dumps(value), nx=True)
 
     def get_ttl(self, key: str) -> int:
         return redis.client.ttl(key)
