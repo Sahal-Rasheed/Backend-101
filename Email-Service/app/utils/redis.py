@@ -23,7 +23,7 @@ class RedisService:
             redis.client.delete(key)
 
     def acquire_lock(self, lock_key: str, value: Any) -> bool:
-        return redis.client.set(lock_key, orjson.dumps(value), nx=True)
+        return redis.client.set(lock_key, orjson.dumps(value), nx=True, ex=300)
 
     def get_ttl(self, key: str) -> int:
         return redis.client.ttl(key)

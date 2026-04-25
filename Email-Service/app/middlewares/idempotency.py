@@ -20,9 +20,6 @@ def idempotency_dependency_middleware(request: Request):
 
     key = f"idempotency:{idempotency_key}"
     existing_response = redis_service.get(key)
-    print(
-        f"Existing idempotency response for key {idempotency_key}: {existing_response}, type: {type(existing_response)}"
-    )
     if existing_response and existing_response["status"] == "processing":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -30,13 +27,13 @@ def idempotency_dependency_middleware(request: Request):
         )
 
     if existing_response and existing_response["status"] == "completed":
-        del existing_response["status"]
-        raise HTTPException(
-            status_code=status.HTTP_200_OK,
-            detail="Duplicate request, returning previous response",
-        )
+        # note: we can only return some value or raise exception from a dependency,
+        # we cannot return a Response object with custom status code etc from here,
+        # such things can be done inside the handler only,
+        # so we return the response body (value) here and will return it from the handler.
+        return existing_response["body"]
 
-    locked = redis_service.acquire_lock(key, {"status": "processing"})
+    locked = redis_service.acquire_lock(key, {"status": "processing"})  # 5 minute lock
     if not locked:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -44,4 +41,4 @@ def idempotency_dependency_middleware(request: Request):
         )
 
 
-IdempotencyDep = Annotated[None, Depends(idempotency_dependency_middleware)]
+IdempotencyDep = Annotated[dict | None, Depends(idempotency_dependency_middleware)]

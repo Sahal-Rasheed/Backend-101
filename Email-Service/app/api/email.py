@@ -31,7 +31,7 @@ email_router = APIRouter()
     "/send", status_code=status.HTTP_200_OK, response_model=EmailSendResponse
 )
 async def send_email(
-    rdep: RateLimiterDep,
+    _: RateLimiterDep,
     idep: IdempotencyDep,
     db: AsyncSessionDep,
     email_data: EmailSendPayload,
@@ -39,6 +39,12 @@ async def send_email(
     x_request_id: str = Header(..., alias="x-request-id"),
 ) -> EmailSendResponse:
     """Endpoint to dispatch email sending tasks."""
+    if idep:
+        print(
+            f"Idempotency response found for request-id {x_request_id}, returning cached response: {idep}"
+        )
+        return EmailSendResponse(**idep)
+
     is_blacklisted = await email_repository.is_email_blacklisted(
         db, email_data.to_email
     )
@@ -86,6 +92,7 @@ async def send_email(
 
     # store task result in redis with idempotency key
     # to prevent duplicate processing of same request
+    # this will override the lock's value
     redis_service.set(
         f"idempotency:{x_request_id}",
         {
