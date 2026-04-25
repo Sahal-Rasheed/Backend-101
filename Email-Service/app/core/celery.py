@@ -1,8 +1,29 @@
-from celery import Celery
+import time
+import logging
+from typing import Any
+
 from kombu import Queue
+from celery import Celery, Task
+from celery.utils.log import get_task_logger
+from celery.signals import (
+    task_retry,
+    task_prerun,
+    task_postrun,
+    task_failure,
+    task_success,
+    after_setup_logger,
+    after_setup_task_logger,
+)  # noqa
 
 from app.core.config import settings
+from app.core.logging import ColorStructuredFormatter, LOG_FORMAT
 
+logger = get_task_logger(__name__)
+
+
+## ------------------------ ##
+## celery app configuration ##
+## ------------------------ ##
 
 celery_app = Celery(
     "email_service_worker",
@@ -67,3 +88,195 @@ celery_app.conf.update(
 
 # load config from separate module (optional, can also configure directly in code as above)
 # celery_app.config_from_object("config_module")
+
+
+## ------------------------------------------------ ##
+## signal handlers for logging, monitoring, DLQ etc ##
+## ------------------------------------------------ ##
+
+## docs: https://docs.celeryq.dev/en/main/userguide/signals.html
+
+
+@task_prerun.connect
+def task_prerun_handler(task_id: str, task: Task, args: tuple, kwargs: dict, **extra):
+    """
+    Dispatched before a task is executed.
+    Sender is the task object being executed.
+
+    Args:
+        task_id (str): Id of the task to be executed.
+        task (Task): The task being executed.
+        args (tuple): The tasks positional arguments.
+        kwargs (dict): The tasks keyword arguments.
+    """
+    # store start time on the task object itself, accessible in postrun
+    task.request.prerun_time = time.monotonic()
+    logger.info(
+        "Task starting",
+        extra={
+            "task_id": task_id,
+            "task_name": task.name,
+            "task_args": args,
+            "task_kwargs": kwargs,
+            "retries": task.request.retries,
+            "max_retries": task.max_retries,
+        },
+    )
+
+
+@task_postrun.connect
+def task_postrun_handler(
+    task_id: str,
+    task: Task,
+    args: tuple,
+    kwargs: dict,
+    retval: Any,
+    state: str,
+    **extra,
+):
+    """
+    Dispatched after a task has been executed.
+    Sender is the task object executed.
+
+    Args:
+        task_id (str): Id of the task to be executed.
+        task (Task): The task being executed.
+        args (tuple): The tasks positional arguments.
+        kwargs (dict): The tasks keyword arguments.
+        retval (Any): The return value of the task.
+        state (str): Name of the resulting state.
+    """
+    # access the start time set in prerun from task obj.
+    duration = (
+        time.monotonic() - task.request.prerun_time
+        if hasattr(task.request, "prerun_time")
+        else None
+    )
+
+    logger.info(
+        "Task completed",
+        extra={
+            "task_id": task_id,
+            "task_name": task.name,
+            "state": state,
+            "duration_seconds": round(duration, 4) if duration else None,
+            "retval": retval,
+        },
+    )
+
+
+@task_success.connect
+def task_success_handler(sender: Task, result: Any, **extra):
+    """
+    Dispatched when a task succeeds.
+    Sender is the task object executed.
+
+    Args:
+        result: Return value of the task.
+    """
+    logger.info(
+        "Task succeeded",
+        extra={
+            "task_name": sender.name,
+            "task_id": sender.request.id,
+            "result": result,
+            "retries": sender.request.retries,
+        },
+    )
+
+
+# global error handler & DLQ for failed tasks
+@task_failure.connect
+def handle_task_failure(
+    sender: Task,
+    task_id: str,
+    exception: Exception,
+    args: tuple,
+    kwargs: dict,
+    traceback: Any,
+    einfo: Any,
+    **extra,
+):
+    """
+    Dispatched when a task fails.
+    Sender is the task object executed.
+
+    Args:
+    task_id: Id of the task.
+    exception: The exception instance raised.
+    args: Positional arguments the task was called with.
+    kwargs: Keyword arguments the task was called with.
+    traceback: Stack trace object.
+    einfo: Exception info instance.
+    """
+    logger.error(
+        "Task failed",
+        extra={
+            "task_id": task_id,
+            "task_name": sender.name,
+            "exception_type": type(exception).__name__,
+            "exception_msg": str(exception),
+            "task_args": args,
+            "task_kwargs": kwargs,
+            "retries": sender.request.retries,
+            "traceback": str(einfo),
+        },
+        exc_info=True,
+    )
+
+    # only treat as dead letter if retries exhausted
+    if sender.request.retries >= sender.max_retries:
+        logger.error(
+            "Max retries exceeded",
+            extra={
+                "task_id": task_id,
+                "task_name": sender.name,
+            },
+        )
+        # log_id = kwargs.get("data", {}).get("id")
+        # if log_id:
+        #     # update_email_log_safe(log_id, status="FAILED", error_reason=str(exception))
+        #     pass
+
+
+@task_retry.connect
+def task_retry_handler(sender: Task, request: Any, reason: str, einfo: Any, **extra):
+    """
+    Dispatched when a task will be retried.
+    Sender is the task object.
+
+    Args:
+        request: The current task request.
+        reason: Reason for retry (usually an exception instance, but can always be coerced to str).
+        einfo: Detailed exception info.
+    """
+    logger.warning(
+        "Task retrying",
+        extra={
+            "task_id": request.id,
+            "task_name": sender.name,
+            "reason": str(reason),
+            "retry_number": request.retries,
+            "max_retries": sender.max_retries,
+        },
+    )
+
+
+@after_setup_logger.connect
+def setup_logger(logger, *args, **kwargs):
+    handler = logging.StreamHandler()
+    handler.setFormatter(ColorStructuredFormatter(LOG_FORMAT))
+
+    logger.handlers = []
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
+@after_setup_task_logger.connect
+def setup_task_logger(logger, *args, **kwargs):
+    handler = logging.StreamHandler()
+    handler.setFormatter(ColorStructuredFormatter(LOG_FORMAT))
+
+    logger.handlers = []
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
