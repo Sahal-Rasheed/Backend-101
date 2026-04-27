@@ -23,11 +23,11 @@ class EmailRepository:
         return email
 
     async def update_email_log_status(
-        self, db: AsyncSession, email: str, status: str, error: str | None = None
+        self, db: AsyncSession, id: str, status: str, error: str | None = None
     ) -> EmailLog | None:
         stmt = (
             update(self.email_log_model)
-            .where(self.email_log_model.to_email == email)
+            .where(self.email_log_model.id == id)
             .values(status=status, error=error)
             .returning(self.email_log_model)
         )

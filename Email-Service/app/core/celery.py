@@ -1,24 +1,25 @@
 import time
-import logging
 from typing import Any
 
 from kombu import Queue
+from sqlalchemy import select
 from celery import Celery, Task
-from celery.utils.log import get_task_logger
+from celery.utils.log import get_task_logger  # noqa
 from celery.signals import (
     task_retry,
     task_prerun,
     task_postrun,
     task_failure,
     task_success,
-    after_setup_logger,
-    after_setup_task_logger,
-)  # noqa
+)
 
 from app.core.config import settings
-from app.core.logging import ColorStructuredFormatter, LOG_FORMAT
+from app.models.email import EmailLog
+from app.schemas.email import EmailStatus
+from app.core.logging import setup_app_logger
+from app.db.sync_session import get_sync_session
 
-logger = get_task_logger(__name__)
+logger = setup_app_logger("app.celery.signals")
 
 
 ## ------------------------ ##
@@ -225,6 +226,7 @@ def handle_task_failure(
     )
 
     # only treat as dead letter if retries exhausted
+    # DLQ handling
     if sender.request.retries >= sender.max_retries:
         logger.error(
             "Max retries exceeded",
@@ -233,10 +235,15 @@ def handle_task_failure(
                 "task_name": sender.name,
             },
         )
-        # log_id = kwargs.get("data", {}).get("id")
-        # if log_id:
-        #     # update_email_log_safe(log_id, status="FAILED", error_reason=str(exception))
-        #     pass
+
+        with get_sync_session() as db:
+            email_log = db.execute(
+                select(EmailLog).where(EmailLog.id == kwargs.get("data", {}).get("id"))
+            ).scalar_one_or_none()
+            email_log.status = EmailStatus.FAILED
+            email_log.error = f"Max retries exceeded. Last error: {str(exception)}"
+            db.commit()
+            db.refresh(email_log)
 
 
 @task_retry.connect
@@ -260,23 +267,3 @@ def task_retry_handler(sender: Task, request: Any, reason: str, einfo: Any, **ex
             "max_retries": sender.max_retries,
         },
     )
-
-
-@after_setup_logger.connect
-def setup_logger(logger, *args, **kwargs):
-    handler = logging.StreamHandler()
-    handler.setFormatter(ColorStructuredFormatter(LOG_FORMAT))
-
-    logger.handlers = []
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
-@after_setup_task_logger.connect
-def setup_task_logger(logger, *args, **kwargs):
-    handler = logging.StreamHandler()
-    handler.setFormatter(ColorStructuredFormatter(LOG_FORMAT))
-
-    logger.handlers = []
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
